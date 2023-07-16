@@ -10,7 +10,7 @@ public class Controls {
 
   public static final double STICK_DEADBAND = 0.06;
   public static final double STICK_LINEAR_COEFFICIENT = 0.5;
-  public static final double STICK_CUBIC_COEFFICIENT = 0.5;
+  public static final double STICK_CUBIC_COEFFICIENT = 1 - STICK_LINEAR_COEFFICIENT;
 
   private final Swerve swerve;
 

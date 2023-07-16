@@ -23,14 +23,6 @@ public class Swerve extends SubsystemBase {
   public static final double MAX_SPEED = 5;
   public static final double MAX_ANGULAR_VELOCITY = 5;
 
-  public static final double WHEEL_DIAMETER = Units.inchesToMeters(4);
-  public static final double ANGLE_GEAR_RATIO = 150.0 / 7.0;
-
-  public static final double DRIVE_GEAR_RATIO =
-      1.0 / ((14.0 / 50.0) * (27.0 / 17.0) * (15.0 / 45.0));
-  public static final double WHEEL_CIRCUMFERENCE = Math.PI * WHEEL_DIAMETER;
-  public static final double ROTATION_TO_METER_RATIO = DRIVE_GEAR_RATIO / WHEEL_CIRCUMFERENCE;
-
   public static final double TRACK_WIDTH = Units.inchesToMeters(23.75);
   public static final double WHEEL_BASE = TRACK_WIDTH;
 
@@ -44,10 +36,10 @@ public class Swerve extends SubsystemBase {
   // Robot swerve modules
   private final List<SwerveModule> modules =
       List.of(
-          new SwerveModule(0, "FL", 1, 2, 3, 4),
-          new SwerveModule(1, "FR", 5, 6, 7, 8),
-          new SwerveModule(2, "BL", 9, 10, 11, 12),
-          new SwerveModule(3, "BR", 13, 14, 15, 16));
+          new SwerveModule(0, "FL", 2, 1, 1, 0.1802),
+          new SwerveModule(1, "FR", 4, 3, 2, -0.3169),
+          new SwerveModule(2, "BL", 8, 7, 4, -0.1667),
+          new SwerveModule(3, "BR", 6, 5, 3, 0.4631));
 
   private final Pigeon2 gyro = new Pigeon2(GYRO_ID);
 
@@ -56,7 +48,9 @@ public class Swerve extends SubsystemBase {
       new SwerveDriveOdometry(DRIVE_KINEMATICS, gyro.getRotation2d(), getModulePositions());
 
   /** Creates a new DriveSubsystem. */
-  public Swerve() {}
+  public Swerve() {
+    resetToAbsolute();
+  }
 
   @Override
   public void periodic() {
@@ -65,7 +59,7 @@ public class Swerve extends SubsystemBase {
   }
 
   public SwerveModulePosition[] getModulePositions() {
-    return (SwerveModulePosition[]) modules.stream().map(SwerveModule::getPosition).toArray();
+    return modules.stream().map(SwerveModule::getPosition).toArray(SwerveModulePosition[]::new);
   }
 
   /**
@@ -123,7 +117,7 @@ public class Swerve extends SubsystemBase {
   }
 
   /**
-   * Method to drive the robot using chassis speeds. Useful for PathPlanner.
+   * Method to drive the robot using chassis speeds. Maybe useful for PathPlanner?
    *
    * @param wantedSpeeds The desired robot speeds.
    */
@@ -140,11 +134,10 @@ public class Swerve extends SubsystemBase {
    * @param desiredStates The desired SwerveModule states.
    */
   public void setModuleStates(SwerveModuleState[] desiredStates) {
-    SwerveDriveKinematics.desaturateWheelSpeeds(desiredStates, MAX_SPEED);
     modules.forEach(m -> m.setDesiredState(desiredStates[m.id]));
   }
 
-  /** Resets the drive encoders to currently read a position of 0. */
+  /** Resets the angle motors to the absolute encoder positions. */
   public void resetToAbsolute() {
     modules.forEach(SwerveModule::resetToAbsolute);
   }
