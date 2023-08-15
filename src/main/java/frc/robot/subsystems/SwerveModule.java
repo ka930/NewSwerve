@@ -32,6 +32,8 @@ public class SwerveModule {
   private final CANcoder angleEncoder;
   private final TalonFX driveMotor;
   private final TalonFX angleMotor;
+  private final VelocityVoltage driveMotorControl;
+  private final PositionVoltage angleMotorControl;
 
   public SwerveModule(
       int id,
@@ -46,6 +48,9 @@ public class SwerveModule {
     angleEncoder = new CANcoder(angleEncoderID);
     driveMotor = new TalonFX(driveMotorID);
     angleMotor = new TalonFX(angleMotorID);
+
+    driveMotorControl = new VelocityVoltage(0);
+    angleMotorControl = new PositionVoltage(0);
 
     var angleEncoderConfig = new CANcoderConfiguration();
     angleEncoderConfig.MagnetSensor.SensorDirection = SensorDirectionValue.Clockwise_Positive;
@@ -100,8 +105,8 @@ public class SwerveModule {
   public void setDesiredState(SwerveModuleState desiredState) {
     // Optimize the reference state to avoid spinning further than 90 degrees
     SwerveModuleState state = SwerveModuleState.optimize(desiredState, getCurrentAngle());
-    driveMotor.setControl(new VelocityVoltage(state.speedMetersPerSecond));
-    angleMotor.setControl(new PositionVoltage(state.angle.getRotations()));
+    angleMotor.setControl(angleMotorControl.withPosition(state.angle.getRotations()));
+    driveMotor.setControl(driveMotorControl.withVelocity(state.speedMetersPerSecond));
   }
 
   public void resetToAbsolute() {
