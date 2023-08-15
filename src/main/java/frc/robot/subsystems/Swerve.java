@@ -41,7 +41,6 @@ public class Swerve extends SubsystemBase {
           new Translation2d(-WHEEL_BASE / 2, TRACK_WIDTH / 2),
           new Translation2d(-WHEEL_BASE / 2, -TRACK_WIDTH / 2));
 
-  // Robot swerve modules
   private final List<SwerveModule> modules =
       List.of(
           new SwerveModule(0, "FL", 2, 1, 1, 0.1802),
@@ -51,11 +50,9 @@ public class Swerve extends SubsystemBase {
 
   private final Pigeon2 gyro = new Pigeon2(GYRO_ID);
 
-  // Odometry class for tracking robot pose
   private final SwerveDriveOdometry odometry =
       new SwerveDriveOdometry(DRIVE_KINEMATICS, gyro.getRotation2d(), getModulePositions());
 
-  /** Creates a new DriveSubsystem. */
   public Swerve() {
     resetToAbsolute();
   }
@@ -70,20 +67,10 @@ public class Swerve extends SubsystemBase {
     return modules.stream().map(SwerveModule::getPosition).toArray(SwerveModulePosition[]::new);
   }
 
-  /**
-   * Returns the currently-estimated pose of the robot.
-   *
-   * @return The pose.
-   */
   public Pose2d getPose() {
     return odometry.getPoseMeters();
   }
 
-  /**
-   * Resets the odometry to the specified pose.
-   *
-   * @param pose The pose to which to set the odometry.
-   */
   public void resetOdometry(Pose2d pose) {
     odometry.resetPosition(gyro.getRotation2d(), getModulePositions(), pose);
   }
@@ -100,14 +87,6 @@ public class Swerve extends SubsystemBase {
     return new ChassisSpeeds(twist.dx / dtSeconds, twist.dy / dtSeconds, twist.dtheta / dtSeconds);
   }
 
-  /**
-   * Method to drive the robot using joystick info.
-   *
-   * @param xSpeed Speed of the robot in the x direction (forward).
-   * @param ySpeed Speed of the robot in the y direction (sideways).
-   * @param rot Angular rate of the robot.
-   * @param fieldRelative Whether the provided x and y speeds are relative to the field.
-   */
   public void joystickDrive(double xSpeed, double ySpeed, double rot, boolean fieldRelative) {
     xSpeed *= MAX_SPEED;
     ySpeed *= MAX_SPEED;
@@ -124,11 +103,6 @@ public class Swerve extends SubsystemBase {
     setModuleStates(desiredStates);
   }
 
-  /**
-   * Method to drive the robot using chassis speeds. Maybe useful for PathPlanner?
-   *
-   * @param wantedSpeeds The desired robot speeds.
-   */
   public void setChassisSpeeds(ChassisSpeeds wantedSpeeds) {
     wantedSpeeds = correctSpeeds(wantedSpeeds);
     var desiredStates = DRIVE_KINEMATICS.toSwerveModuleStates(wantedSpeeds);
@@ -136,21 +110,14 @@ public class Swerve extends SubsystemBase {
     setModuleStates(desiredStates);
   }
 
-  /**
-   * Sets the swerve ModuleStates.
-   *
-   * @param desiredStates The desired SwerveModule states.
-   */
   public void setModuleStates(SwerveModuleState[] desiredStates) {
     modules.forEach(m -> m.setDesiredState(desiredStates[m.id]));
   }
 
-  /** Resets the angle motors to the absolute encoder positions. */
   public void resetToAbsolute() {
     modules.forEach(SwerveModule::resetToAbsolute);
   }
 
-  /** Zeroes the heading of the robot. */
   public void zeroHeading() {
     gyro.setYaw(0);
   }
@@ -163,7 +130,8 @@ public class Swerve extends SubsystemBase {
     public static final double WHEEL_CIRCUMFERENCE = Math.PI * WHEEL_DIAMETER;
     public static final double ROTATION_TO_METER_RATIO = DRIVE_GEAR_RATIO / WHEEL_CIRCUMFERENCE;
 
-    public static final double ANGLE_KP = 5; // TODO actually tune these, this is just a guess rn lol
+    public static final double ANGLE_KP =
+        5; // TODO actually tune these, this is just a guess rn lol
     public static final double DRIVE_KS = 0.1;
     public static final double DRIVE_KV = 2.4;
     public static final double DRIVE_KP = 0.6;
