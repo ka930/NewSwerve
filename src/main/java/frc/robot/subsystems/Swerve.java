@@ -4,15 +4,8 @@
 
 package frc.robot.subsystems;
 
-import com.ctre.phoenix6.configs.CANcoderConfiguration;
-import com.ctre.phoenix6.configs.TalonFXConfiguration;
-import com.ctre.phoenix6.controls.PositionVoltage;
-import com.ctre.phoenix6.controls.VelocityVoltage;
-import com.ctre.phoenix6.hardware.CANcoder;
 import com.ctre.phoenix6.hardware.Pigeon2;
-import com.ctre.phoenix6.hardware.TalonFX;
-import com.ctre.phoenix6.signals.AbsoluteSensorRangeValue;
-import com.ctre.phoenix6.signals.SensorDirectionValue;
+import com.ctre.phoenix6.sim.Pigeon2SimState;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
@@ -22,8 +15,12 @@ import edu.wpi.first.math.kinematics.SwerveDriveOdometry;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.smartdashboard.Field2d;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import frc.robot.Robot;
 import java.util.List;
 
 public class Swerve extends SubsystemBase {
@@ -49,18 +46,15 @@ public class Swerve extends SubsystemBase {
           new SwerveModule(3, "BR", 6, 5, 3, 0.4631));
 
   private final Pigeon2 gyro = new Pigeon2(GYRO_ID);
+  private final Pigeon2SimState gyroSim = new Pigeon2(GYRO_ID).getSimState();
 
   private final SwerveDriveOdometry odometry =
       new SwerveDriveOdometry(DRIVE_KINEMATICS, gyro.getRotation2d(), getModulePositions());
+  private Field2d field = new Field2d();
 
   public Swerve() {
     resetToAbsolute();
-  }
-
-  @Override
-  public void periodic() {
-    // Update the odometry in the periodic block
-    odometry.update(gyro.getRotation2d(), getModulePositions());
+    SmartDashboard.putData("Field", field);
   }
 
   public SwerveModulePosition[] getModulePositions() {
@@ -100,16 +94,23 @@ public class Swerve extends SubsystemBase {
     var desiredStates = DRIVE_KINEMATICS.toSwerveModuleStates(wantedSpeeds);
     SwerveDriveKinematics.desaturateWheelSpeeds(
         desiredStates, wantedSpeeds, MAX_SPEED, MAX_SPEED, MAX_ANGULAR_VELOCITY);
+
+    if (Robot.isSimulation()) {
+      double x = Math.toDegrees(wantedSpeeds.omegaRadiansPerSecond * .02);
+      SmartDashboard.putNumber("swerve sim rad.02s speed", x);
+      gyroSim.addYaw(x);
+    }
+
     setModuleStates(desiredStates);
   }
-
-  public void setChassisSpeeds(ChassisSpeeds wantedSpeeds) {
-    wantedSpeeds = correctSpeeds(wantedSpeeds);
-    var desiredStates = DRIVE_KINEMATICS.toSwerveModuleStates(wantedSpeeds);
-    SwerveDriveKinematics.desaturateWheelSpeeds(desiredStates, MAX_SPEED);
-    setModuleStates(desiredStates);
-  }
-
+  /*
+    public void setChassisSpeeds(ChassisSpeeds wantedSpeeds) {
+      wantedSpeeds = correctSpeeds(wantedSpeeds);
+      var desiredStates = DRIVE_KINEMATICS.toSwerveModuleStates(wantedSpeeds);
+      SwerveDriveKinematics.desaturateWheelSpeeds(desiredStates, MAX_SPEED);
+      setModuleStates(desiredStates);
+    }
+  */
   public void setModuleStates(SwerveModuleState[] desiredStates) {
     modules.forEach(m -> m.setDesiredState(desiredStates[m.id]));
   }
@@ -122,106 +123,20 @@ public class Swerve extends SubsystemBase {
     gyro.setYaw(0);
   }
 
-  public static class SwerveModule {
-    public static final double WHEEL_DIAMETER = Units.inchesToMeters(4);
-    public static final double ANGLE_GEAR_RATIO = 150.0 / 7.0;
-    public static final double DRIVE_GEAR_RATIO =
-        1.0 / ((14.0 / 50.0) * (27.0 / 17.0) * (15.0 / 45.0));
-    public static final double WHEEL_CIRCUMFERENCE = Math.PI * WHEEL_DIAMETER;
-    public static final double ROTATION_TO_METER_RATIO = DRIVE_GEAR_RATIO / WHEEL_CIRCUMFERENCE;
+  @Override
+  public void periodic() {
+    // Update the odometry in the periodic block
+    odometry.update(gyro.getRotation2d(), getModulePositions());
+    field.setRobotPose(odometry.getPoseMeters());
+  }
 
-    public static final double ANGLE_KP =
-        5; // TODO actually tune these, this is just a guess rn lol
-    public static final double DRIVE_KS = 0.1;
-    public static final double DRIVE_KV = 2.4;
-    public static final double DRIVE_KP = 0.6;
-
-    public final int id;
-    public final String name;
-
-    private final CANcoder angleEncoder;
-    private final TalonFX driveMotor;
-    private final TalonFX angleMotor;
-    private final VelocityVoltage driveMotorControl;
-    private final PositionVoltage angleMotorControl;
-
-    public SwerveModule(
-        int id,
-        String name,
-        int driveMotorID,
-        int angleMotorID,
-        int angleEncoderID,
-        double cancoderOffset) {
-      this.id = id;
-      this.name = name;
-
-      angleEncoder = new CANcoder(angleEncoderID);
-      driveMotor = new TalonFX(driveMotorID);
-      angleMotor = new TalonFX(angleMotorID);
-
-      driveMotorControl = new VelocityVoltage(0);
-      angleMotorControl = new PositionVoltage(0);
-
-      var angleEncoderConfig = new CANcoderConfiguration();
-      angleEncoderConfig.MagnetSensor.SensorDirection = SensorDirectionValue.Clockwise_Positive;
-      angleEncoderConfig.MagnetSensor.MagnetOffset = cancoderOffset;
-      angleEncoderConfig.MagnetSensor.AbsoluteSensorRange =
-          AbsoluteSensorRangeValue.Signed_PlusMinusHalf;
-      angleEncoder.getConfigurator().apply(angleEncoderConfig);
-
-      var driveMotorConfig = new TalonFXConfiguration();
-      driveMotorConfig.Slot0.kS = DRIVE_KS;
-      driveMotorConfig.Slot0.kV = DRIVE_KV;
-      driveMotorConfig.Slot0.kP = DRIVE_KP;
-      driveMotorConfig.Feedback.SensorToMechanismRatio = ROTATION_TO_METER_RATIO;
-      driveMotor.getConfigurator().apply(driveMotorConfig);
-
-      var angleMotorConfig = new TalonFXConfiguration();
-      angleMotorConfig.Slot0.kP = ANGLE_KP;
-      angleMotorConfig.Feedback.SensorToMechanismRatio = ANGLE_GEAR_RATIO;
-      angleMotorConfig.ClosedLoopGeneral.ContinuousWrap = true;
-      angleMotor.getConfigurator().apply(angleMotorConfig);
-    }
-
-    public SwerveModuleState getState() {
-      return new SwerveModuleState(getVelocity(), getAngle());
-    }
-
-    public Rotation2d getAngle() {
-      return Rotation2d.fromRotations(angleMotor.getPosition().getValue());
-    }
-
-    public double getVelocity() {
-      return driveMotor.getVelocity().getValue();
-    }
-
-    public double getDrivePosition() {
-      return driveMotor.getPosition().getValue();
-    }
-    /**
-     * Returns the current position of the module.
-     *
-     * @return The current position of the module.
-     */
-    public SwerveModulePosition getPosition() {
-      return new SwerveModulePosition(getDrivePosition(), getAngle());
-    }
-
-    /**
-     * Sets the desired state for the module.
-     *
-     * @param desiredState Desired state with speed and angle.
-     */
-    public void setDesiredState(SwerveModuleState desiredState) {
-      // Optimize the reference state to avoid spinning further than 90 degrees
-      SwerveModuleState state = SwerveModuleState.optimize(desiredState, getAngle());
-      angleMotor.setControl(angleMotorControl.withPosition(state.angle.getRotations()));
-      driveMotor.setControl(driveMotorControl.withVelocity(state.speedMetersPerSecond));
-    }
-
-    public void resetToAbsolute() {
-      double encoderAngle = angleEncoder.getPosition().waitForUpdate(0.1).getValue();
-      angleMotor.setRotorPosition(encoderAngle * ANGLE_GEAR_RATIO);
-    }
+  @Override
+  public void simulationPeriodic() {
+    gyroSim.setSupplyVoltage(RobotController.getBatteryVoltage());
+    modules.forEach(SwerveModule::simulationPeriodic);
+    double load = modules.stream().map(SwerveModule::getLoad).reduce(0.0, Double::sum);
+    SmartDashboard.putNumber("swerve amperage", load);
+    // don't use batterysim because it causes really weird issues which I don't feel like debugging?
+    // RoboRioSim.setVInVoltage(BatterySim.calculateDefaultBatteryLoadedVoltage(load));
   }
 }
